@@ -1,0 +1,104 @@
+entity Keypad is
+	Port ( clk : in BIT;
+		R0 : in BIT; -- Ri's are rows
+		R1 : in BIT;
+		R2 : in BIT;
+		R3 : in BIT;
+		C0 : inout BIT; -- Ci's are columns
+		C1 : inout BIT;
+		C2 : inout BIT;
+		N0 : out BIT; -- Ni's are binary numbers which forms N
+		N1 : out BIT;
+		N2 : out BIT;
+		N3 : out BIT;
+		Vout : out BIT); -- when a valid key has been detected, the scanner should output a signal Vout for one clock time.
+end Keypad;
+
+architecture Behavior of Keypad is
+
+	-- signals declarations
+	signal aux, K1, K2: bit;
+	-- K1 is the signal generated when a key has been pressed
+	-- K2 is K1 delayed by two clock cycles (K2 is used to avoid malfunctions due to switch bounce)
+	signal current_state, next_state: integer range 0 to 5; -- I have 6 states in my block diagram
+
+begin
+	process(clk)
+		begin
+		if clk = '1' and clk'EVENT then
+			current_state <= next_state;
+			aux <= K1;
+			K2 <= aux;
+		end if;
+	end process;
+
+K1 <= R0 or R1 or R2 or R3; -- this is the decoder block
+N3 <= (R2 and not C0) or (R3 and not C1);
+N2 <= R1 or (R2 and C0);
+N1 <= (R0 and not C0) or (not R2 and C2) or (not R1 and not R0 and C0);
+N0 <= (R1 and C1) or (not R1 and C2) or (not R3 and not R1 and not C1);
+
+process(current_state, R0, R1, R2, R3, C0, C1, C2, K1, K2, aux)
+begin
+	-- the Keyscan (controller) block
+	-- State0 (IDLE)
+	C0 <= '0';
+	C1 <= '0';
+	C2 <= '0';
+	Vout <= '0';
+
+	case current_state is
+		when 0 => next_state <= 1;
+		-- State1
+		when 1 => C0 <= '1';
+		C1 <= '1';
+		C2 <= '1';
+		if (K2 and K1) = '1' then
+			next_state <= 2;
+		else
+			next_state <= 1;
+		end if;
+
+		-- State2
+		when 2 => C0 <= '1';
+		if (K2 and K1) = '1' then
+			Vout <= '1';
+			next_state <= 5;
+		elsif K1 = '0' then
+			next_state <= 3;
+		else
+			next_state <= 2;
+		end if;
+
+		-- State3
+		when 3 => C1 <= '1';
+		if (K2 and K1) = '1' then
+			Vout <= '1';
+			next_state <= 5;
+		elsif K1 = '0' then
+			next_state <= 4;
+		else
+			next_state <= 3;
+		end if;
+
+		-- State4
+		when 4 => C2 <= '1';
+		if (K2 and K1) = '1' then
+			Vout <= '1';
+			next_state <= 5;
+		else
+			next_state <= 4;
+		end if;
+
+		-- State5
+		when 5 => C0 <= '1';
+		C1 <= '1';
+		C2 <= '1';
+		if K2 = '0' then
+			next_state <= 1;
+		else
+			next_state <= 5;
+		end if;
+		end case;
+	end process;
+end Behavior;
